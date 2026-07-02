@@ -18,6 +18,10 @@ class Wallet {
 	get spendings() {
 		return this.#transactions.filter(tx => tx.type === "send");
 	}
+
+	get totalVolume() {
+		return this.#transactions.reduce((sum, tx) => tx.amount + sum, 0)
+	}
 } 
 
 
