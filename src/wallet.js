@@ -1,3 +1,7 @@
+Array.prototype.getLastTx = function() {
+		return this[this.length -1]
+	}
+
 class Wallet {
 	#privateKey = undefined
 	#balance = undefined
