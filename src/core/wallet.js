@@ -2,7 +2,9 @@ Array.prototype.getLastTx = function() {
 		return this[this.length -1]
 	}
 
-class Wallet {
+	
+
+export class Wallet {
 	#privateKey = undefined
 	#balance = undefined
 	address = undefined
@@ -25,6 +27,10 @@ class Wallet {
 
 	get totalVolume() {
 		return this.#transactions.reduce((sum, tx) => tx.amount + sum, 0)
+	}
+
+	findTransactionsByHash(query) {
+		return this.#transactions.filter(tx => (tx.hash.startsWith(query) || tx.hash.endsWith(query)))
 	}
 } 
 
