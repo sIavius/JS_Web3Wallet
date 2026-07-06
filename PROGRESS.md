@@ -12,3 +12,6 @@ Step 6/28
 
 Day 5
 Steps 8/28
+
+Day 6
+Steps 10/28

@@ -1,1 +1,1 @@
-import Wallet from "src/core/wallet.js"
+import {Wallet} from "./core/wallet.js"

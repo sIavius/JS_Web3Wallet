@@ -7,8 +7,8 @@ Array.prototype.getLastTx = function() {
 export class Wallet {
 	#privateKey = undefined
 	#balance = undefined
-	address = undefined
 	#transactions = undefined
+	address = undefined
 	
 	constructor(_privateKey) {
 		if(_privateKey) {
