@@ -2,19 +2,18 @@ Array.prototype.getLastTx = function() {
 		return this[this.length -1]
 	}
 
-	
-
 export class Wallet {
 	#privateKey = undefined
 	#balance = undefined
 	#transactions = undefined
+	#apiClient = undefined
 	address = undefined
 	
-	constructor(_privateKey) {
+	constructor(_privateKey, apiClient) {
+		this.#apiClient = apiClient;
 		if(_privateKey) {
 			this.#privateKey = _privateKey;
 		} //else this.#privateKey = random string logic
-		
 	}
 
 	get maskedAddress() {
@@ -31,6 +30,11 @@ export class Wallet {
 
 	findTransactionsByHash(query) {
 		return this.#transactions.filter(tx => (tx.hash.startsWith(query) || tx.hash.endsWith(query)))
+	}
+
+	async updateBalance(coin) {
+		const rates = await this.#apiClient.fetchRates(coin);
+		this.#balance = rates[coin].usd;
 	}
 } 
 

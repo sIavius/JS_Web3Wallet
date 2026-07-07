@@ -15,3 +15,5 @@ Steps 8/28
 
 Day 6
 Steps 10/28
+
+Day 7
