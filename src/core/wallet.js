@@ -1,6 +1,35 @@
-Array.prototype.getLastTx = function() {
+//wallet.js
+Array.prototype.getLastTx = function() { // legacy hint for studying
 		return this[this.length -1]
+}
+
+import {validateEthAddress} from "../utils/helpers.js"
+
+export class InsufficientFundsError extends Error {
+	constructor(message, amount, balance) {
+		super(message)
+		this.name = this.constructor.name
+		this.amount = amount
+		this.balance = balance
 	}
+}
+
+export class InvalidAmountError extends Error {
+	constructor(message, amount, balance) {
+		super(message)
+		this.name = this.constructor.name
+		this.amount = amount
+		this.balance = balance
+	}
+}
+
+export class InvalidAddressError extends Error {
+	constructor(message, address) {
+		super(message)
+		this.name = this.constructor.name
+		this.address = address
+	}
+}
 
 export class Wallet {
 	#privateKey = undefined
@@ -14,6 +43,12 @@ export class Wallet {
 		if(_privateKey) {
 			this.#privateKey = _privateKey;
 		} //else this.#privateKey = random string logic
+		this.#transactions = []
+		this.#balance = 0
+	}
+
+	get balance() {
+		return this.#balance;
 	}
 
 	get maskedAddress() {
@@ -33,9 +68,51 @@ export class Wallet {
 	}
 
 	async updateBalance(coin) {
-		const rates = await this.#apiClient.fetchRates(coin);
-		this.#balance = rates[coin].usd;
+		try {
+			const rates = await this.#apiClient.fetchRates(coin);
+			this.#balance = rates[coin]?.usd ?? this.#balance;
+		}
+		catch(error) {
+			console.error("Balance update error ", error.message);
+			throw error;
+		}
 	}
+
+	deposit(amount, coin) {
+		if(amount <= 0 || !Number.isFinite(amount)) {
+			throw new InvalidAmountError("Amount incorrect", amount, this.#balance)
+		}
+		this.#balance += amount;
+		this.#transactions.push({
+			type: 'receive',
+			amount: amount,
+			coin: coin,
+			timestamp: Date.now()
+		})
+	}
+
+	pay(amount, coin, address) {
+		if(!validateEthAddress(address)) {
+			throw new InvalidAddressError("Invalid address", address)
+		}
+
+		if(amount <= 0 || !Number.isFinite(amount)) {
+			throw new InvalidAmountError("Amount incorrect", amount, this.#balance)
+		}
+		
+		if(this.#balance < amount) {
+			throw new InsufficientFundsError("Insufficient funds", amount, this.#balance)
+		}
+		
+		this.#balance -= amount;
+		this.#transactions.push({
+			type: 'send',
+			amount: amount,
+			coin: coin,
+			timestamp: Date.now()
+		})
+		//createNonceGenerator(startValue) {}
+}
 } 
 
 
