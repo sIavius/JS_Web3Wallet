@@ -1,5 +1,5 @@
 //main.js
-import {Wallet, InvalidAmountError, InsufficientFundsError, InvalidAddressError} from "./wallet.js"
+import {Wallet, InvalidAmountError, InsufficientFundsError, InvalidAddressError, ApiNetworkError} from "./wallet.js"
 import CryptoApiClient from "./CryptoApi.js"
 import { createNonceGenerator } from "../utils/helpers.js";
 
@@ -21,6 +21,9 @@ function main() {
             }
             else if(error instanceof InvalidAddressError) {
                 console.error("Invalid address", error.address, error.message)
+            }
+            else if(error instanceof ApiNetworkError) {
+                console.error("API network error", error.statusText, error.statusCode)
             }
         }
         

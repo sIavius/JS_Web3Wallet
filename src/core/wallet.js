@@ -31,6 +31,15 @@ export class InvalidAddressError extends Error {
 	}
 }
 
+export class ApiNetworkError extends Error {
+	constructor(message, statusText, statusCode) {
+	super(message)
+	this.name = this.constructor.name
+	this.statusText = statusText
+	this.statusCode = statusCode
+	}
+}
+
 export class Wallet {
 	#privateKey = undefined
 	//#balance = undefined
@@ -73,17 +82,18 @@ export class Wallet {
 		return this.#transactions.filter(tx => (tx.hash.startsWith(query) || tx.hash.endsWith(query)))
 	}
 
-	/* async updateBalance(coin) {
+	async getTokenValue(coin) {
 		try {
 			const rates = await this.#apiClient.fetchRates(coin);
-			this.#balance = rates[coin]?.usd ?? this.getTokenBalance;
+			//this.setTokenBalance = rates[coin]?.usd ?? this.getTokenBalance(coin);
+			return this.getTokenBalance(coin) * rates[coin].usd
 		}
 		catch(error) {
 			console.error("Balance update error ", error.message);
 			throw error;
 		}
 	}
-	*/
+	
 
 	deposit(amount, coin) {
 		if(amount <= 0 || !Number.isFinite(amount)) {
