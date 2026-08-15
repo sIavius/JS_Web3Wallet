@@ -17,3 +17,4 @@ Day 6
 Steps 10/28
 
 Day 7
+Changing tactics. Block 1 done

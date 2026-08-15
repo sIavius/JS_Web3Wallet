@@ -3,7 +3,7 @@ Array.prototype.getLastTx = function() { // legacy hint for studying
 		return this[this.length -1]
 }
 
-import {validateEthAddress} from "../utils/helpers.js"
+import {createNonceGenerator, validateEthAddress} from "../utils/helpers.js"
 
 export class InsufficientFundsError extends Error {
 	constructor(message, amount, balance) {
@@ -33,22 +33,24 @@ export class InvalidAddressError extends Error {
 
 export class Wallet {
 	#privateKey = undefined
-	#balance = undefined
+	//#balance = undefined
 	#transactions = undefined
 	#apiClient = undefined
+	#generateNonce = createNonceGenerator(-1)
+	#addressBook
+	#tokenBalances
 	address = undefined
 	
+	
 	constructor(_privateKey, apiClient) {
-		this.#apiClient = apiClient;
+		this.#apiClient = apiClient
 		if(_privateKey) {
-			this.#privateKey = _privateKey;
+			this.#privateKey = _privateKey
 		} //else this.#privateKey = random string logic
 		this.#transactions = []
-		this.#balance = 0
-	}
-
-	get balance() {
-		return this.#balance;
+		//this.#balance = 0
+		this.#addressBook = new Set()
+		this.#tokenBalances = new Map()
 	}
 
 	get maskedAddress() {
@@ -63,26 +65,34 @@ export class Wallet {
 		return this.#transactions.reduce((sum, tx) => tx.amount + sum, 0)
 	}
 
+	get addressBookSize() {
+		return this.#addressBook.size
+	}
+
 	findTransactionsByHash(query) {
 		return this.#transactions.filter(tx => (tx.hash.startsWith(query) || tx.hash.endsWith(query)))
 	}
 
-	async updateBalance(coin) {
+	/* async updateBalance(coin) {
 		try {
 			const rates = await this.#apiClient.fetchRates(coin);
-			this.#balance = rates[coin]?.usd ?? this.#balance;
+			this.#balance = rates[coin]?.usd ?? this.getTokenBalance;
 		}
 		catch(error) {
 			console.error("Balance update error ", error.message);
 			throw error;
 		}
 	}
+	*/
 
 	deposit(amount, coin) {
 		if(amount <= 0 || !Number.isFinite(amount)) {
-			throw new InvalidAmountError("Amount incorrect", amount, this.#balance)
+			throw new InvalidAmountError("Amount incorrect", amount, this.getTokenBalance(coin))
 		}
-		this.#balance += amount;
+		const currentBalance = this.getTokenBalance(coin)
+		const newBalance = currentBalance + amount
+		this.setTokenBalance(coin, newBalance)
+		//this.#balance += amount;
 		this.#transactions.push({
 			type: 'receive',
 			amount: amount,
@@ -92,27 +102,39 @@ export class Wallet {
 	}
 
 	pay(amount, coin, address) {
+		const currentBalance = this.getTokenBalance(coin)
 		if(!validateEthAddress(address)) {
 			throw new InvalidAddressError("Invalid address", address)
 		}
 
 		if(amount <= 0 || !Number.isFinite(amount)) {
-			throw new InvalidAmountError("Amount incorrect", amount, this.#balance)
+			throw new InvalidAmountError("Amount incorrect", amount, this.getTokenBalance(coin))
 		}
 		
-		if(this.#balance < amount) {
-			throw new InsufficientFundsError("Insufficient funds", amount, this.#balance)
+		if(currentBalance < amount) {
+			throw new InsufficientFundsError("Insufficient funds", amount, currentBalance)
 		}
 		
-		this.#balance -= amount;
+		//this.#balance -= amount;
+		this.#addressBook.add(address)
+		const newBalance = currentBalance - amount
+		this.setTokenBalance(coin, newBalance)
 		this.#transactions.push({
 			type: 'send',
 			amount: amount,
 			coin: coin,
-			timestamp: Date.now()
+			timestamp: Date.now(),
+			nonce: this.#generateNonce()
 		})
-		//createNonceGenerator(startValue) {}
+	}
+	setTokenBalance(ticker, amount) { 
+		this.#tokenBalances.set(ticker, amount)
+	}
+
+	getTokenBalance(ticker) { //Map
+		return this.#tokenBalances.get(ticker) ?? 0
+	}
 }
-} 
+
 
 
