@@ -1,5 +1,5 @@
 //CryptoApi.js
-import {ApiNetworkError} from "./wallet.js";
+import {ApiNetworkError} from "../utils/errors.js";
 
 export default class CryptoApiClient {
     #baseUrl = 'https://api.coingecko.com/api/v3'

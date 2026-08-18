@@ -1,43 +1,10 @@
 //wallet.js
-Array.prototype.getLastTx = function() { // legacy hint for studying
-		return this[this.length -1]
-}
 
 import {createNonceGenerator, validateEthAddress} from "../utils/helpers.js"
+import {InvalidAmountError, InsufficientFundsError, InvalidAddressError, ApiNetworkError} from "../utils/errors.js"
 
-export class InsufficientFundsError extends Error {
-	constructor(message, amount, balance) {
-		super(message)
-		this.name = this.constructor.name
-		this.amount = amount
-		this.balance = balance
-	}
-}
-
-export class InvalidAmountError extends Error {
-	constructor(message, amount, balance) {
-		super(message)
-		this.name = this.constructor.name
-		this.amount = amount
-		this.balance = balance
-	}
-}
-
-export class InvalidAddressError extends Error {
-	constructor(message, address) {
-		super(message)
-		this.name = this.constructor.name
-		this.address = address
-	}
-}
-
-export class ApiNetworkError extends Error {
-	constructor(message, statusText, statusCode) {
-	super(message)
-	this.name = this.constructor.name
-	this.statusText = statusText
-	this.statusCode = statusCode
-	}
+Array.prototype.getLastTx = function() { // legacy hint for studying
+		return this[this.length -1]
 }
 
 export class Wallet {
@@ -71,7 +38,11 @@ export class Wallet {
 	}
 
 	get totalVolume() {
-		return this.#transactions.reduce((sum, tx) => tx.amount + sum, 0)
+		return this.#transactions.reduce((acc, tx) => 
+			{	
+				acc[tx.coin] = (acc[tx.coin] ?? 0) + Math.abs(tx.amount ?? 0);
+				return acc;
+			}, {})
 	}
 
 	get addressBookSize() {
@@ -83,10 +54,11 @@ export class Wallet {
 	}
 
 	async getTokenValue(coin) {
+		coin = coin.toLowerCase()
 		try {
-			const rates = await this.#apiClient.fetchRates(coin);
+			const rates = await this.#apiClient.fetchRates(coin)
 			//this.setTokenBalance = rates[coin]?.usd ?? this.getTokenBalance(coin);
-			return this.getTokenBalance(coin) * rates[coin].usd
+			return this.getTokenBalance(coin) * (rates[coin]?.usd ?? 0)
 		}
 		catch(error) {
 			console.error("Balance update error ", error.message);
@@ -96,6 +68,7 @@ export class Wallet {
 	
 
 	deposit(amount, coin) {
+		coin = coin.toLowerCase()
 		if(amount <= 0 || !Number.isFinite(amount)) {
 			throw new InvalidAmountError("Amount incorrect", amount, this.getTokenBalance(coin))
 		}
@@ -112,6 +85,7 @@ export class Wallet {
 	}
 
 	pay(amount, coin, address) {
+		coin = coin.toLowerCase()
 		const currentBalance = this.getTokenBalance(coin)
 		if(!validateEthAddress(address)) {
 			throw new InvalidAddressError("Invalid address", address)
@@ -143,6 +117,16 @@ export class Wallet {
 
 	getTokenBalance(ticker) { //Map
 		return this.#tokenBalances.get(ticker) ?? 0
+	}
+
+	*getTransactionChunks(chunkSize) {
+		let i = 0
+		let sortedTransactions = [...this.#transactions] //copying array
+		.sort((a, b) => a.coin.localeCompare(b.coin))
+		while(i < sortedTransactions.length) {
+			yield sortedTransactions.slice(i, i + chunkSize)
+			i += chunkSize
+		}
 	}
 }
 
