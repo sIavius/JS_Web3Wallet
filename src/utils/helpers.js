@@ -11,3 +11,7 @@ export function createNonceGenerator(startValue) {
     }
     return generateNonce
 }
+
+export function validateAmountETH() {
+    //const AmountRegEx = /^(0|\d)\.()?$/
+}
