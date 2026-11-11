@@ -1,134 +1,126 @@
-//wallet.js
-
-import {createNonceGenerator, validateEthAddress} from "../utils/helpers.js"
-import {InvalidAmountError, InsufficientFundsError, InvalidAddressError, ApiNetworkError} from "../utils/errors.js"
-
-Array.prototype.getLastTx = function() { // legacy hint for studying
-		return this[this.length -1]
-}
+import { createNonceGenerator, validateEthAddress } from "../utils/helpers.js";
+import { InvalidAmountError, InsufficientFundsError, InvalidAddressError } from "../utils/errors.js";
 
 export class Wallet {
-	#privateKey = undefined
-	//#balance = undefined
-	#transactions = undefined
-	#apiClient = undefined
-	#generateNonce = createNonceGenerator(-1)
-	#addressBook
-	#tokenBalances
-	address = undefined
-	
-	
-	constructor(_privateKey, apiClient) {
-		this.#apiClient = apiClient
-		if(_privateKey) {
-			this.#privateKey = _privateKey
-		} //else this.#privateKey = random string logic
-		this.#transactions = []
-		//this.#balance = 0
-		this.#addressBook = new Set()
-		this.#tokenBalances = new Map()
-	}
+    #address;
+    #transactions = [];
+    #apiClient;
+    #generateNonce = createNonceGenerator(-1);
+    #addressBook = new Set();
+    #tokenBalances = new Map();
 
-	get maskedAddress() {
-		return this.address.slice(0, 6) + "..." + this.address.slice(-4);
-	}
+    constructor(address, apiClient) {
+        if (!validateEthAddress(address)) {
+            throw new InvalidAddressError("Invalid wallet address", address);
+        }
 
-	get spendings() {
-		return this.#transactions.filter(tx => tx.type === "send");
-	}
+        this.#address = address;
+        this.#apiClient = apiClient;
+    }
 
-	get totalVolume() {
-		return this.#transactions.reduce((acc, tx) => 
-			{	
-				acc[tx.coin] = (acc[tx.coin] ?? 0) + Math.abs(tx.amount ?? 0);
-				return acc;
-			}, {})
-	}
+    get address() {
+        return this.#address;
+    }
 
-	get addressBookSize() {
-		return this.#addressBook.size
-	}
+    get maskedAddress() {
+        return this.address.slice(0, 6) + "..." + this.address.slice(-4);
+    }
 
-	findTransactionsByHash(query) {
-		return this.#transactions.filter(tx => (tx.hash.startsWith(query) || tx.hash.endsWith(query)))
-	}
+    get spendings() {
+        return this.#transactions.filter(tx => tx.type === "send");
+    }
 
-	async getTokenValue(coin) {
-		coin = coin.toLowerCase()
-		try {
-			const rates = await this.#apiClient.fetchRates(coin)
-			//this.setTokenBalance = rates[coin]?.usd ?? this.getTokenBalance(coin);
-			return this.getTokenBalance(coin) * (rates[coin]?.usd ?? 0)
-		}
-		catch(error) {
-			console.error("Balance update error ", error.message);
-			throw error;
-		}
-	}
-	
+    get totalVolume() {
+        const volumeByCoin = this.#transactions.reduce((volume, tx) => {
+            volume.set(tx.coin, (volume.get(tx.coin) ?? 0) + tx.amount);
+            return volume;
+        }, new Map());
 
-	deposit(amount, coin) {
-		coin = coin.toLowerCase()
-		if(amount <= 0 || !Number.isFinite(amount)) {
-			throw new InvalidAmountError("Amount incorrect", amount, this.getTokenBalance(coin))
-		}
-		const currentBalance = this.getTokenBalance(coin)
-		const newBalance = currentBalance + amount
-		this.setTokenBalance(coin, newBalance)
-		//this.#balance += amount;
-		this.#transactions.push({
-			type: 'receive',
-			amount: amount,
-			coin: coin,
-			timestamp: Date.now()
-		})
-	}
+        return Object.fromEntries(volumeByCoin);
+    }
 
-	pay(amount, coin, address) {
-		coin = coin.toLowerCase()
-		const currentBalance = this.getTokenBalance(coin)
-		if(!validateEthAddress(address)) {
-			throw new InvalidAddressError("Invalid address", address)
-		}
+    get addressBookSize() {
+        return this.#addressBook.size;
+    }
 
-		if(amount <= 0 || !Number.isFinite(amount)) {
-			throw new InvalidAmountError("Amount incorrect", amount, this.getTokenBalance(coin))
-		}
-		
-		if(currentBalance < amount) {
-			throw new InsufficientFundsError("Insufficient funds", amount, currentBalance)
-		}
-		
-		//this.#balance -= amount;
-		this.#addressBook.add(address)
-		const newBalance = currentBalance - amount
-		this.setTokenBalance(coin, newBalance)
-		this.#transactions.push({
-			type: 'send',
-			amount: amount,
-			coin: coin,
-			timestamp: Date.now(),
-			nonce: this.#generateNonce()
-		})
-	}
-	setTokenBalance(ticker, amount) { 
-		this.#tokenBalances.set(ticker, amount)
-	}
+    findTransactionById(id) {
+        return this.#transactions.find(tx => tx.id === id);
+    }
 
-	getTokenBalance(ticker) { //Map
-		return this.#tokenBalances.get(ticker) ?? 0
-	}
+    async getTokenValue(coin) {
+        const coinId = coin.toLowerCase();
+        const rates = await this.#apiClient.fetchRates(coinId);
+        return this.getTokenBalance(coinId) * (rates[coinId]?.usd ?? 0);
+    }
 
-	*getTransactionChunks(chunkSize) {
-		let i = 0
-		let sortedTransactions = [...this.#transactions] //copying array
-		.sort((a, b) => a.coin.localeCompare(b.coin))
-		while(i < sortedTransactions.length) {
-			yield sortedTransactions.slice(i, i + chunkSize)
-			i += chunkSize
-		}
-	}
+    deposit(amount, coin) {
+        const coinId = coin.toLowerCase();
+        const balance = this.getTokenBalance(coinId);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw new InvalidAmountError("Invalid deposit amount", amount, balance);
+        }
+
+        this.setTokenBalance(coinId, balance + amount);
+        return this.#recordTransaction({ type: "receive", amount, coin: coinId });
+    }
+
+    pay(amount, coin, address) {
+        const coinId = coin.toLowerCase();
+        const balance = this.getTokenBalance(coinId);
+        if (!validateEthAddress(address)) {
+            throw new InvalidAddressError("Invalid recipient address", address);
+        }
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw new InvalidAmountError("Invalid payment amount", amount, balance);
+        }
+
+        if (balance < amount) {
+            throw new InsufficientFundsError("Insufficient funds", amount, balance);
+        }
+
+        this.setTokenBalance(coinId, balance - amount);
+        this.#addressBook.add(address.toLowerCase());
+        return this.#recordTransaction({
+            type: "send",
+            amount,
+            coin: coinId,
+            address,
+            nonce: this.#generateNonce(),
+        });
+    }
+
+    setTokenBalance(coin, amount) {
+        if (!Number.isFinite(amount) || amount < 0) {
+            throw new InvalidAmountError("Invalid balance", amount, this.getTokenBalance(coin));
+        }
+
+        this.#tokenBalances.set(coin.toLowerCase(), amount);
+    }
+
+    getTokenBalance(coin) {
+        return this.#tokenBalances.get(coin.toLowerCase()) ?? 0;
+    }
+
+    *getTransactionChunks(chunkSize) {
+        if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) {
+            throw new RangeError("Chunk size must be a positive safe integer");
+        }
+
+        const length = this.#transactions.length;
+        for (let offset = 0; offset < length; offset += chunkSize) {
+            yield this.#transactions.slice(offset, Math.min(offset + chunkSize, length));
+        }
+    }
+
+    #recordTransaction(details) {
+        const transaction = Object.freeze({
+            id: this.#transactions.length + 1,
+            ...details,
+            timestamp: Date.now(),
+        });
+
+        this.#transactions.push(transaction);
+        return transaction;
+    }
 }
-
-
-

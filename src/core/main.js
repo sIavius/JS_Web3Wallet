@@ -1,54 +1,30 @@
-//main.js
-import {InvalidAmountError, InsufficientFundsError, InvalidAddressError, ApiNetworkError} from "../utils/errors.js"
-import {Wallet} from "./wallet.js"
-import CryptoApiClient from "./CryptoApi.js"
-import { createNonceGenerator } from "../utils/helpers.js";
+import CryptoApiClient from "./CryptoApi.js";
+import { Wallet } from "./wallet.js";
+import { InsufficientFundsError } from "../utils/errors.js";
 
-let myClient = new CryptoApiClient();
-const myWallet = new Wallet("test_string", myClient);
+const wallet = new Wallet("0x1111111111111111111111111111111111111111", new CryptoApiClient());
+const recipient = "0x2222222222222222222222222222222222222222";
+const asset = "ethereum";
 
-function main() {
-    
-    try {
-        myWallet.deposit(100, 'ethereum')
-        myWallet.pay(5, 'ethereum', '0x123123123dda123123123dda123123123ddafbd4')
-        } 
-        catch(error) {
-            if(error instanceof InsufficientFundsError) {
-                console.error("Insufficient funds ", error.amount - error.balance, error.message)
-            }
-            else if(error instanceof InvalidAmountError) {
-                console.error("Invalid amount ", error.amount, error.message)
-            }
-            else if(error instanceof InvalidAddressError) {
-                console.error("Invalid address", error.address, error.message)
-            }
-            else if(error instanceof ApiNetworkError) {
-                console.error("API network error", error.statusText, error.statusCode)
-            }
-        }
-        
-}
-
-main();
+console.log("Wallet:", wallet.maskedAddress);
+wallet.deposit(10, asset);
+console.log("Deposited: 10 ETH");
+const payment = wallet.pay(3, asset, recipient);
+console.log(`Payment #${payment.id}: 3 ETH to ${payment.address}`);
 
 try {
-    myWallet.deposit(100, 'Ethereum')
-    myWallet.deposit(50, 'BTC')
-    myWallet.pay(40, 'Btc', '0x123123123dda123123123dda123123123ddafbd4')
-    myWallet.pay(30, 'ethereum', '0x123123123dda123123123dda123123123ddafbd4')
-    myWallet.deposit(60, 'solana')
-} 
-catch(error) {
-    console.error(error.message)
+    wallet.pay(8, asset, recipient);
+} catch (error) {
+    if (!(error instanceof InsufficientFundsError)) {
+        throw error;
+    }
+    console.log(`Payment rejected: requested ${error.amount} ETH, available ${error.balance} ETH.`);
 }
 
-
-for (const chunk of myWallet.getTransactionChunks(2)) {
-    console.log(chunk)
+console.log(`Final balance: ${wallet.getTokenBalance(asset)} ETH`);
+console.log("Transaction history:");
+for (const page of wallet.getTransactionChunks(2)) {
+    for (const transaction of page) {
+        console.log(`  #${transaction.id} ${transaction.type} ${transaction.amount} ETH`);
+    }
 }
-
-
-
-
-
